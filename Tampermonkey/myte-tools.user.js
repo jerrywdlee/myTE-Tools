@@ -19,10 +19,6 @@
     const WORKING_GRID_SELECTOR = "#workingHoursPunchClockGrid .ag-row";
     const RUNTIME_PREFIX = "[myTE Tools]";
 
-    const state = {
-        panelDismissed: false,
-    };
-
     function logStatus(message) {
         console.log(`${RUNTIME_PREFIX} ${message}`);
         const status = document.getElementById("helper-status");
@@ -234,10 +230,12 @@
         }
     }
 
-    function buildPanelHtml() {
+    function buildDialogContent() {
         return `
-            <button id="btn-close-helper" style="position:absolute; top:8px; right:8px; width:24px; height:24px; border:none; background:transparent; color:#7500c0; font-size:18px; cursor:pointer; line-height:1;" title="Close">&times;</button>
-            <div style="font-weight:bold; color:#7500c0; margin-bottom:15px; font-size:15px; text-align:center; border-bottom:1px solid #eee; padding-bottom:8px;">myTE Auto-Filler</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:8px;">
+                <div style="font-weight:bold; color:#7500c0; font-size:15px;">myTE Auto-Filler</div>
+                <button id="btn-close-dialog" style="width:24px; height:24px; border:none; background:transparent; color:#7500c0; font-size:18px; cursor:pointer; line-height:1;" title="Close">&times;</button>
+            </div>
             <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
                 <div style="display:flex; align-items:center; justify-content:space-between;"><span>Work:</span><span><input type="text" id="in-ws" value="9" style="width:35px; text-align:center;"> - <input type="text" id="in-we" value="12" style="width:35px; text-align:center;"></span></div>
                 <div style="display:flex; align-items:center; justify-content:space-between;"><span>Break:</span><span><input type="text" id="in-bs" value="12" style="width:35px; text-align:center;"> - <input type="text" id="in-be" value="13" style="width:35px; text-align:center;"></span></div>
@@ -250,44 +248,66 @@
         `;
     }
 
-    function mountPanel() {
-        const panel = document.createElement("div");
-        panel.id = "ballban-helper";
-        panel.style =
-            "position:fixed; top:100px; right:30px; z-index:999999; background:white; border:3px solid #7500c0; padding:15px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); width:200px; font-family:sans-serif; font-size:13px;";
-        panel.innerHTML = buildPanelHtml();
-        document.body.appendChild(panel);
+    function getOrCreateDialog() {
+        let dialog = document.getElementById("myte-tools-dialog");
+        if (dialog) {
+            return dialog;
+        }
 
-        const startButton = document.getElementById("btn-start-fill");
-        const closeButton = document.getElementById("btn-close-helper");
+        dialog = document.createElement("dialog");
+        dialog.id = "myte-tools-dialog";
+        dialog.style =
+            "border:3px solid #7500c0; padding:15px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); width:200px; font-family:sans-serif; font-size:13px; background:white; color:#1f1f1f;";
+        dialog.innerHTML = buildDialogContent();
+        document.body.appendChild(dialog);
+
+        const startButton = dialog.querySelector("#btn-start-fill");
+        const closeButton = dialog.querySelector("#btn-close-dialog");
 
         if (startButton) {
             startButton.onclick = startProcess;
         }
 
         if (closeButton) {
-            closeButton.onclick = () => {
-                state.panelDismissed = true;
-                panel.remove();
-            };
+            closeButton.onclick = () => dialog.close();
         }
+
+        return dialog;
+    }
+
+    function mountButton(titleElement) {
+        const button = document.createElement("button");
+        button.id = "myte-tools-btn";
+        button.style = "border:none; border-radius:20%; position:absolute; margin-left:150px;";
+        button.textContent = "🛸";
+        button.onclick = () => {
+            const dialog = getOrCreateDialog();
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        };
+
+        titleElement.after(button);
     }
 
     function handleUI() {
-        const infoPanel = document.querySelector(".myte-accordion-title");
-        const existingPanel = document.getElementById("ballban-helper");
+        const accordionTitle = document.querySelector(".myte-accordion-title");
+        const existingButton = document.getElementById("myte-tools-btn");
+        const dialog = document.getElementById("myte-tools-dialog");
 
-        if (!infoPanel) {
-            if (existingPanel) {
-                existingPanel.remove();
+        if (!accordionTitle) {
+            if (existingButton) {
+                existingButton.remove();
             }
-            state.panelDismissed = false;
+            if (dialog?.open) {
+                dialog.close();
+            }
             return;
         }
 
-        const isInformationPage = infoPanel.innerText.includes("Information");
-        if (isInformationPage && !existingPanel && !state.panelDismissed) {
-            mountPanel();
+        const titleElement = document.querySelector(".popup-container .header .title");
+        if (titleElement && !existingButton) {
+            mountButton(titleElement);
         }
     }
 
