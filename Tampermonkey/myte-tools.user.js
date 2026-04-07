@@ -20,6 +20,17 @@
     const RUNTIME_PREFIX = "[myTE Tools]";
     const NOTICE_ID = "helper-running-notice";
     const NOTICE_ANIMATION_MS = 1000;
+    const VACATION_CODES = [
+      '900X00', // Regular Vacation
+      '950X00', // Personal Illness
+      '983X00', // Z Unpaid Absence
+      '984X00', // Childecare Leave_Unpaid
+      '140Z01', // Female Leave_Paid
+      '140Z02', // Female Leave_Unpaid
+      '731Z21', // Marrage Leave
+      '734Z21', // Mother's Welfare Leave
+      '735Z22', // Mother's Welfare Leave Hospital
+    ]
 
     function logStatus(message) {
         console.log(`${RUNTIME_PREFIX} ${message}`);
@@ -125,6 +136,44 @@
 
         console.log(`${RUNTIME_PREFIX} Parsed Overtime Map:`, overtimeMap);
         return overtimeMap;
+    }
+
+    function getVacationDaySet() {
+        const vacationDays = new Set();
+        const rows = Array.from(document.querySelectorAll(".ag-row"));
+        const vacationRows = rows.filter((row) => {
+          const categoryText = row.querySelector('[col-id="Assignment"]')?.innerText || "";
+            console.log(`Checking row for vacation codes:`, categoryText);
+            return VACATION_CODES.some((code) => categoryText.includes(code));
+        });
+
+        for (const row of vacationRows) {
+            for (let i = 0; i <= 14; i += 1) {
+                const colId = `Date${i}`;
+                const cell = row.querySelector(`[col-id="${colId}"]`);
+                if (!cell) {
+                    continue;
+                }
+
+                const normalizedValue = (cell.innerText || "").replace(/\s+/g, "").replace(/,/g, "");
+                const isEmpty = normalizedValue === "";
+                const numericValue = Number(normalizedValue);
+                const isZero = !isEmpty && !Number.isNaN(numericValue) && numericValue === 0;
+
+                if (isEmpty || isZero) {
+                    continue;
+                }
+
+                const header = document.querySelector(`.ag-header-cell[col-id="${colId}"]`);
+                const dateNumMatch = header?.innerText.match(/\d+/);
+                if (dateNumMatch) {
+                    vacationDays.add(dateNumMatch[0].padStart(2, "0"));
+                }
+            }
+        }
+
+        console.log(`${RUNTIME_PREFIX} Parsed Vacation Days:`, Array.from(vacationDays));
+        return vacationDays;
     }
 
     function smartSelect(selectEl, targetValue) {
@@ -260,7 +309,9 @@
 
         try {
             const syncOt = document.getElementById("sync-ot")?.checked;
+            const skipVacations = document.getElementById("skip-vacations")?.checked;
             const overtimeMap = syncOt ? getOvertimeMap() : {};
+            const vacationDays = skipVacations ? getVacationDaySet() : new Set();
 
             const baseR2End = parseInt(document.getElementById("in-r2e")?.value || "18", 10);
             const values = {
@@ -276,6 +327,12 @@
             for (const dateText of workdays) {
                 const dayMatch = dateText.match(/\d+$/);
                 const dayKey = dayMatch ? dayMatch[0].padStart(2, "0") : null;
+
+                if (dayKey && vacationDays.has(dayKey)) {
+                    logStatus(`Skipping ${dateText} | Vacation`);
+                    continue;
+                }
+
                 const overtime = overtimeMap[dayKey] || 0;
 
                 logStatus(`Processing ${dateText} | OT: ${overtime}h`);
@@ -398,14 +455,16 @@
                 <button id="btn-close-dialog" style="width:24px; height:24px; border:none; background:transparent; color:#7500c0; font-size:18px; cursor:pointer; line-height:1;" title="Close">&times;</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
-                <div style="display:flex; align-items:center; justify-content:space-between;"><span>Work:</span><span><input type="text" id="in-ws" value="9" style="width:35px; text-align:center;"> - <input type="text" id="in-we" value="12" style="width:35px; text-align:center;"></span></div>
-                <div style="display:flex; align-items:center; justify-content:space-between;"><span>Break:</span><span><input type="text" id="in-bs" value="12" style="width:35px; text-align:center;"> - <input type="text" id="in-be" value="13" style="width:35px; text-align:center;"></span></div>
-                <div style="display:flex; align-items:center; justify-content:space-between;"><span>Work:</span><span><input type="text" id="in-r2s" value="13" style="width:35px; text-align:center;"> - <input type="text" id="in-r2e" value="18" style="width:35px; text-align:center;"></span></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="min-width:72px;">Work:</span><span style="display:flex; align-items:center; gap:8px;"><input type="text" id="in-ws" value="9" style="width:48px; text-align:center;"> <span>-</span> <input type="text" id="in-we" value="12" style="width:48px; text-align:center;"></span></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="min-width:72px;">Break:</span><span style="display:flex; align-items:center; gap:8px;"><input type="text" id="in-bs" value="12" style="width:48px; text-align:center;"> <span>-</span> <input type="text" id="in-be" value="13" style="width:48px; text-align:center;"></span></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;"><span style="min-width:72px;">Work:</span><span style="display:flex; align-items:center; gap:8px;"><input type="text" id="in-r2s" value="13" style="width:48px; text-align:center;"> <span>-</span> <input type="text" id="in-r2e" value="18" style="width:48px; text-align:center;"></span></div>
             </div>
             <div style="margin-bottom:10px; padding:8px; background:#f4f0ff; border-radius:6px;">
                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="sync-ot" checked><span style="font-weight:bold; color:#7500c0;">Auto-sync Overtime</span></label>
+                <br/>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="skip-vacations" checked><span style="font-weight:bold; color:#7500c0;">Skip Vacations</span></label>
             </div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                 <button id="btn-start-fill" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">START FILLING</button>
                 <button id="btn-reset-hours" style="width:100%; background:white; color:#7500c0; border:1px solid #7500c0; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">RESET HOURS</button>
             </div>
@@ -421,7 +480,7 @@
         dialog = document.createElement("dialog");
         dialog.id = "myte-tools-dialog";
         dialog.style =
-            "border:3px solid #7500c0; padding:15px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); width:200px; font-family:sans-serif; font-size:13px; background:white; color:#1f1f1f;";
+            "border:3px solid #7500c0; padding:18px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); width:400px; max-width:min(90vw, 400px); font-family:sans-serif; font-size:13px; background:white; color:#1f1f1f;";
         dialog.innerHTML = buildDialogContent();
         document.body.appendChild(dialog);
 
