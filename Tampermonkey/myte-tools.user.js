@@ -18,6 +18,8 @@
     const UI_INTERVAL_MS = 1000;
     const WORKING_GRID_SELECTOR = "#workingHoursPunchClockGrid .ag-row";
     const RUNTIME_PREFIX = "[myTE Tools]";
+    const NOTICE_ID = "helper-running-notice";
+    const NOTICE_ANIMATION_MS = 2000;
 
     function logStatus(message) {
         console.log(`${RUNTIME_PREFIX} ${message}`);
@@ -27,11 +29,19 @@
         }
     }
 
-    function setRunningNotice(message, variant = "running", autoHideMs = 0) {
-        let notice = document.getElementById("helper-running-notice");
+    function setRunningNotice(message, variant = "running", autoHideMs = 4000) {
+        let notice = document.getElementById(NOTICE_ID);
 
         if (!message) {
             if (notice) {
+                if (notice._hideTimer) {
+                    clearTimeout(notice._hideTimer);
+                    notice._hideTimer = null;
+                }
+                if (notice._removeTimer) {
+                    clearTimeout(notice._removeTimer);
+                    notice._removeTimer = null;
+                }
                 notice.remove();
             }
             return;
@@ -39,27 +49,47 @@
 
         if (!notice) {
             notice = document.createElement("div");
-            notice.id = "helper-running-notice";
+            notice.id = NOTICE_ID;
             document.body.appendChild(notice);
         }
 
         const palette = {
-            running: { bg: "#1f1f1f", fg: "#ffffff" },
-            success: { bg: "#1f7a3d", fg: "#ffffff" },
-            error: { bg: "#9b1c1c", fg: "#ffffff" },
+            running: { bg: "#1f1f1f", fg: "#ffffff", border: "#3b3b3b" },
+            success: { bg: "#4caf50", fg: "#ffffff", border: "#2e7d32" },
+            error: { bg: "#f44336", fg: "#ffffff", border: "#b71c1c" },
         };
         const colors = palette[variant] || palette.running;
 
-        notice.style = `position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1000000; background:${colors.bg}; color:${colors.fg}; padding:14px 18px; border-radius:10px; font-family:sans-serif; font-size:14px; font-weight:bold; box-shadow:0 12px 28px rgba(0,0,0,0.35); min-width:220px; text-align:center;`;
+        notice.style = `position:fixed; top:20px; right:20px; width:auto; min-width:400px; padding:12px 18px; border-radius:10px; color:${colors.fg}; font-family:sans-serif; font-size:14px; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:1000000; transform:translateY(20px); opacity:0; transition:opacity ${NOTICE_ANIMATION_MS}ms ease, transform ${NOTICE_ANIMATION_MS}ms ease; background:${colors.bg}; border-left:6px solid ${colors.border};`;
         notice.innerHTML = `<div id="helper-status">${message}</div>`;
 
         if (notice._hideTimer) {
             clearTimeout(notice._hideTimer);
             notice._hideTimer = null;
         }
+        if (notice._removeTimer) {
+            clearTimeout(notice._removeTimer);
+            notice._removeTimer = null;
+        }
+
+        setTimeout(() => {
+            if (!document.getElementById(NOTICE_ID)) {
+                return;
+            }
+
+            notice.style.opacity = "0.95";
+            notice.style.transform = "translateY(0)";
+        }, 10);
 
         if (autoHideMs > 0) {
-            notice._hideTimer = setTimeout(() => notice.remove(), autoHideMs);
+            const duration = Math.max(1000, autoHideMs);
+            notice._hideTimer = setTimeout(() => {
+                notice.style.opacity = "0";
+                notice.style.transform = "translateY(-20px)";
+                notice._removeTimer = setTimeout(() => {
+                    notice.remove();
+                }, NOTICE_ANIMATION_MS);
+            }, Math.max(0, duration - NOTICE_ANIMATION_MS));
         }
     }
 
@@ -223,6 +253,11 @@
 
             logStatus("SUCCESS!");
             setRunningNotice("Done!", "success", 1800);
+
+            const dialog = document.getElementById("myte-tools-dialog");
+            if (dialog?.open) {
+                dialog.close();
+            }
         } catch (error) {
             console.error(`${RUNTIME_PREFIX} Auto fill failed:`, error);
             logStatus("Failed. Check console.");
