@@ -19,7 +19,7 @@
     const WORKING_GRID_SELECTOR = "#workingHoursPunchClockGrid .ag-row";
     const RUNTIME_PREFIX = "[myTE Tools]";
     const NOTICE_ID = "helper-running-notice";
-    const NOTICE_ANIMATION_MS = 2000;
+    const NOTICE_ANIMATION_MS = 1000;
 
     function logStatus(message) {
         console.log(`${RUNTIME_PREFIX} ${message}`);
@@ -60,7 +60,7 @@
         };
         const colors = palette[variant] || palette.running;
 
-        notice.style = `position:fixed; top:20px; right:20px; width:auto; min-width:400px; padding:12px 18px; border-radius:10px; color:${colors.fg}; font-family:sans-serif; font-size:14px; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:1000000; transform:translateY(20px); opacity:0; transition:opacity ${NOTICE_ANIMATION_MS}ms ease, transform ${NOTICE_ANIMATION_MS}ms ease; background:${colors.bg}; border-left:6px solid ${colors.border};`;
+        notice.style = `position:fixed; top:20px; right:20px; width:auto; min-width:400px; padding:12px 18px; border-radius:10px; color:${colors.fg}; font-family:sans-serif; font-size:14px; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:1000000; transform:translateY(20px); opacity:0; transition:opacity 200ms ease, transform ${NOTICE_ANIMATION_MS}ms ease; background:${colors.bg}; border-left:6px solid ${colors.border};`;
         notice.innerHTML = `<div id="helper-status">${message}</div>`;
 
         if (notice._hideTimer) {
@@ -146,6 +146,51 @@
         selectEl.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
+    function setSelectValue(selectEl, value) {
+        if (!selectEl) {
+            return;
+        }
+
+        selectEl.value = String(value);
+        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+        selectEl.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    function waitForSelector(selector, timeout = 10000, root = document) {
+        return new Promise((resolve, reject) => {
+            const element = root.querySelector(selector);
+            if (element) {
+                resolve(element);
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                const nextElement = root.querySelector(selector);
+                if (nextElement) {
+                    observer.disconnect();
+                    resolve(nextElement);
+                }
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            const timerId = setTimeout(() => {
+                observer.disconnect();
+                reject(new Error(`Timeout: "${selector}" not found`));
+            }, timeout);
+
+            observer.takeRecords();
+            Promise.resolve().then(() => {
+                const nextElement = root.querySelector(selector);
+                if (nextElement) {
+                    clearTimeout(timerId);
+                    observer.disconnect();
+                    resolve(nextElement);
+                }
+            });
+        });
+    }
+
     async function fillCellPrecision(row, colId, hour, minute) {
         const cell = row.querySelector(`[col-id="${colId}"]`);
         if (!cell) {
@@ -185,7 +230,31 @@
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    async function clickSaveIfAvailable() {
+        const buttons = Array.from(document.querySelectorAll("button"));
+        const saveButton = buttons.find((button) => button.innerText.trim() === "Save");
+
+        if (!saveButton || saveButton.disabled) {
+            return false;
+        }
+
+        saveButton.click();
+        await sleep(2000);
+        return true;
+    }
+
+    function setDialogControlsDisabled(disabled) {
+        const dialog = document.getElementById("myte-tools-dialog");
+        if (!dialog) {
+            return;
+        }
+        dialog.querySelectorAll("input, select, button").forEach((el) => {
+            el.disabled = disabled;
+        });
+    }
+
     async function startProcess() {
+        setDialogControlsDisabled(true);
         setRunningNotice("myTE Auto-Filler is running...", "running");
         logStatus("Starting auto fill...");
 
@@ -262,6 +331,63 @@
             console.error(`${RUNTIME_PREFIX} Auto fill failed:`, error);
             logStatus("Failed. Check console.");
             setRunningNotice("Failed. Check console.", "error", 2500);
+        } finally {
+            setDialogControlsDisabled(false);
+        }
+    }
+
+    async function resetHoursProcess() {
+        setDialogControlsDisabled(true);
+        setRunningNotice("myTE hour entries are being reset...", "running");
+        logStatus("Starting reset...");
+
+        try {
+            await waitForSelector(WORKING_GRID_SELECTOR);
+
+            const rows = Array.from(document.querySelectorAll(WORKING_GRID_SELECTOR));
+            let clearedRowCount = 0;
+
+            for (const row of rows) {
+                const dateCell = row.querySelector('[col-id="dateTime"]');
+                if (!dateCell) {
+                    continue;
+                }
+
+                let rowChanged = false;
+                const selects = row.querySelectorAll("select");
+
+                for (const selectEl of selects) {
+                    const firstOption = selectEl.options[0];
+                    const resetValue = firstOption ? firstOption.value : "";
+                    if (selectEl.value !== resetValue) {
+                        setSelectValue(selectEl, resetValue);
+                        rowChanged = true;
+                    }
+                }
+
+                if (rowChanged) {
+                    clearedRowCount += 1;
+                    await sleep(50);
+                }
+            }
+
+            // あえて保存ボタンはクリックせず、ユーザーが内容を確認してから手動で保存できるようにする
+            // await sleep(300);
+            // await clickSaveIfAvailable();
+
+            logStatus(`Reset complete: ${clearedRowCount} rows`);
+            setRunningNotice(`Reset complete: ${clearedRowCount} rows`, "success", 2200);
+
+            const dialog = document.getElementById("myte-tools-dialog");
+            if (dialog?.open) {
+              dialog.close();
+            }
+        } catch (error) {
+            console.error(`${RUNTIME_PREFIX} Reset hours failed:`, error);
+            logStatus("Reset failed. Check console.");
+            setRunningNotice("Reset failed. Check console.", "error", 2500);
+        } finally {
+            setDialogControlsDisabled(false);
         }
     }
 
@@ -279,7 +405,10 @@
             <div style="margin-bottom:10px; padding:8px; background:#f4f0ff; border-radius:6px;">
                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="sync-ot" checked><span style="font-weight:bold; color:#7500c0;">Auto-sync Overtime</span></label>
             </div>
-            <button id="btn-start-fill" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">START FILLING</button>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <button id="btn-start-fill" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">START FILLING</button>
+                <button id="btn-reset-hours" style="width:100%; background:white; color:#7500c0; border:1px solid #7500c0; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">RESET HOURS</button>
+            </div>
         `;
     }
 
@@ -297,10 +426,15 @@
         document.body.appendChild(dialog);
 
         const startButton = dialog.querySelector("#btn-start-fill");
+        const resetButton = dialog.querySelector("#btn-reset-hours");
         const closeButton = dialog.querySelector("#btn-close-dialog");
 
         if (startButton) {
             startButton.onclick = startProcess;
+        }
+
+        if (resetButton) {
+            resetButton.onclick = resetHoursProcess;
         }
 
         if (closeButton) {
