@@ -55,11 +55,15 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 ![Header toolbar buttons](./public/images/image-1.png)
 
-2. Optionally enable:
+2. Adjust (Work / Break / Work) rows as needed.
+
+![Sample generated email content](./public/images/image-2.png)
+
+3. Optionally enable:
 	 - `Auto-sync Overtime`: Automatically apply overtime hours.
 	 - `Skip Vacations`: Do not auto-fill days that include leave/vacation entries.
-3. Click `START FILLING`.
-4. Wait for completion notice.
+4. Click `START FILLING`.
+5. Wait for completion notice.
 
 ### Email EML (`📧`)
 
@@ -69,12 +73,10 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 2. Edit YAML frontmatter + Markdown template if needed.
 
-![Email template dialog](./public/images/image-2.png)
+![Sample generated email content](./public/images/image-3.png)
 
 3. Click `Download Email`.
 4. The script captures 4 tabs and downloads an `.eml` file.
-
-![Sample generated email content](./public/images/image-3.png)
 
 ### Email template format
 
@@ -89,12 +91,12 @@ Reference:
 
 Example:
 
-```markdown
+```yaml
 ---
 from: 'from@example.com'
 to: 'to@example.com'
 cc:
-	- 'cc@example.com'
+  - 'cc@example.com'
 subject: '[myTE] Period {{period}} Approval Request'
 ---
 ```
@@ -110,6 +112,8 @@ Dear Team,
 {{Expenses}}
 ## Adjustments
 {{Adjustments}}
+
+regards,
 ```
 
 Supported metadata keys:
@@ -122,7 +126,7 @@ Supported metadata keys:
 
 Subject variables:
 
-- `{{period}}` is replaced with `document.querySelector('#comboboxselect-period-dropdown .active').textContent`
+- `{{period}}` is replaced with current period like `2026/04/15`
 
 Body placeholders:
 

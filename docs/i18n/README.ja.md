@@ -30,6 +30,10 @@ Languages: [English](../../README.md) | 日本語 | [简体中文](./README.zh-H
 2. 拡張機能設定で次を有効化します。
    - Developer mode
    - Allow user scripts
+
+![Extensions settings](../../public/images/Extensions.png)
+![Allow user scripts](../../public/images/UserScript.png)
+
 3. 以下のURLを開きます。
 
 ```text
@@ -48,18 +52,32 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 ### Working Hours (`⏰`)
 
 1. ツールバーの `⏰` をクリック
-2. 必要に応じて以下のチェックボックスをON
+
+![Header toolbar buttons](../../public/images/image-1.png)
+
+2. 必要に応じて (Work / Break / Work) の行を調整
+
+![Sample generated email content](../../public/images/image-2.png)
+
+3. 必要に応じて以下のチェックボックスをON
   - `Auto-sync Overtime`: 残業時間を自動的に反映する
   - `Skip Vacations`: 有給など休みが入った日に対して、自動記入しない
-3. `START FILLING` をクリック
-4. 完了通知を待つ
+4. `START FILLING` をクリック
+5. 完了通知を待つ
 
 ### Email EML (`📧`)
 
 1. ツールバーの `📧` をクリック
+
+![Header toolbar buttons](../../public/images/image-1.png)
+
 2. YAML frontmatter + Markdown テンプレートを編集
+
+![Sample generated email content](../../public/images/image-3.png)
+
 3. `Download Email` をクリック
 4. 4タブをキャプチャした `.eml` がダウンロードされます
+
 
 ### Emailテンプレートの書き方
 
@@ -95,6 +113,8 @@ Dear Team,
 {{Expenses}}
 ## Adjustments
 {{Adjustments}}
+
+regards,
 ```
 
 利用できるメタデータキー:
@@ -107,29 +127,11 @@ Dear Team,
 
 件名の変数:
 
-- `{{period}}` は `document.querySelector('#comboboxselect-period-dropdown .active').textContent` の値に置換されます
+- `{{period}}` は `2026/04/15` のような現在の期間に置換されます
 
 本文のプレースホルダー:
 
 - `{{Summary}}`, `{{Time}}`, `{{Expenses}}`, `{{Adjustments}}` は、HTMLメール本文でキャプチャ画像に置換されます
-
-## スクリーンショット
-
-### Working Hours ダイアログ
-![Working Hours dialog](../../public/images/image.png)
-
-### ヘッダーツールバー
-![Toolbar buttons](../../public/images/image-1.png)
-
-### Email テンプレートダイアログ
-![Email template dialog](../../public/images/image-2.png)
-
-### 生成されるメール例
-![Generated email](../../public/images/image-3.png)
-
-### Tampermonkey 設定
-![Extensions settings](../../public/images/Extensions.png)
-![Allow user scripts](../../public/images/UserScript.png)
 
 ## 更新について
 
