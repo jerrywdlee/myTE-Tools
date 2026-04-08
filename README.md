@@ -30,6 +30,10 @@ It combines two features in one toolbar:
 2. Ensure extension settings are enabled:
 	 - Developer mode
 	 - Allow user scripts
+
+![Extensions settings](./public/images/Extensions.png)
+![Allow user scripts](./public/images/UserScript.png)
+
 3. Open the script raw URL:
 
 ```text
@@ -37,26 +41,40 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 ```
 
 4. Tampermonkey will open the install page, then click `Install`.
-5. Reload myTE and open the Working Hours page.
+5. In Tampermonkey, make sure the `myTE Tools` script is enabled.
+
+![Enable myTE Tools script in Tampermonkey](./public/images/image.png)
+
+6. Reload myTE and open the Working Hours page.
 
 ## Usage
 
 ### Working Hours (`⏰`)
 
 1. Click `⏰` on the myTE toolbar.
-2. Configure time ranges (Work / Break / Work).
-3. Optionally enable:
-	 - `Auto-sync Overtime`
-	 - `Skip Vacations`
-4. Click `START FILLING`.
-5. Wait for completion notice.
+
+![Header toolbar buttons](./public/images/image-1.png)
+
+2. Optionally enable:
+	 - `Auto-sync Overtime`: Automatically apply overtime hours.
+	 - `Skip Vacations`: Do not auto-fill days that include leave/vacation entries.
+3. Click `START FILLING`.
+4. Wait for completion notice.
 
 ### Email EML (`📧`)
 
 1. Click `📧` on the myTE toolbar.
+
+![Header toolbar buttons](./public/images/image-1.png)
+
 2. Edit YAML frontmatter + Markdown template if needed.
+
+![Email template dialog](./public/images/image-2.png)
+
 3. Click `Download Email`.
 4. The script captures 4 tabs and downloads an `.eml` file.
+
+![Sample generated email content](./public/images/image-3.png)
 
 ### Email template format
 
@@ -109,24 +127,6 @@ Subject variables:
 Body placeholders:
 
 - `{{Summary}}`, `{{Time}}`, `{{Expenses}}`, `{{Adjustments}}` are replaced with captured images in the HTML email body.
-
-## Screenshots
-
-### Working Hours dialog
-![Working Hours dialog](./public/images/image.png)
-
-### Header toolbar buttons
-![Toolbar buttons](./public/images/image-1.png)
-
-### Email template dialog
-![Email template dialog](./public/images/image-2.png)
-
-### Sample generated email content
-![Generated email](./public/images/image-3.png)
-
-### Tampermonkey browser settings
-![Extensions settings](./public/images/Extensions.png)
-![Allow user scripts](./public/images/UserScript.png)
 
 ## Update behavior
 

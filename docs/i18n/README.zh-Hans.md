@@ -37,19 +37,22 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 ```
 
 4. Tampermonkey 会打开安装页，点击 `Install`。
-5. 刷新 myTE 并进入 Working Hours 页面。
+5. 在 Tampermonkey 中确认 `myTE Tools` 脚本已启用（ON）。
+
+![在 Tampermonkey 中启用 myTE Tools](../../public/images/image.png)
+
+6. 刷新 myTE 并进入 Working Hours 页面。
 
 ## 使用方法
 
 ### Working Hours (`⏰`)
 
 1. 点击工具栏 `⏰`
-2. 配置时间（Work / Break / Work）
-3. 按需勾选：
-   - `Auto-sync Overtime`
-   - `Skip Vacations`
-4. 点击 `START FILLING`
-5. 等待完成提示
+2. 按需勾选：
+  - `Auto-sync Overtime`：自动同步并填入加班时长
+  - `Skip Vacations`：对有请假/休假记录的日期不自动填写
+3. 点击 `START FILLING`
+4. 等待完成提示
 
 ### Email EML (`📧`)
 

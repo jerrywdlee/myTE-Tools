@@ -37,19 +37,22 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 ```
 
 4. Tampermonkeyのインストール画面で `Install` をクリックします。
-5. myTEをリロードして Working Hours 画面を開きます。
+5. Tampermonkey上で `myTE Tools` スクリプトが有効（ON）になっていることを確認します。
+
+![Tampermonkey で myTE Tools を有効化](../../public/images/image.png)
+
+6. myTEをリロードして Working Hours 画面を開きます。
 
 ## 使い方
 
 ### Working Hours (`⏰`)
 
 1. ツールバーの `⏰` をクリック
-2. 時刻（Work / Break / Work）を設定
-3. 必要に応じて以下をON
-   - `Auto-sync Overtime`
-   - `Skip Vacations`
-4. `START FILLING` をクリック
-5. 完了通知を待つ
+2. 必要に応じて以下のチェックボックスをON
+  - `Auto-sync Overtime`: 残業時間を自動的に反映する
+  - `Skip Vacations`: 有給など休みが入った日に対して、自動記入しない
+3. `START FILLING` をクリック
+4. 完了通知を待つ
 
 ### Email EML (`📧`)
 
