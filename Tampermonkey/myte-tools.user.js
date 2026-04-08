@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.0.0
+// @version      1.0.3
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       jerrywdlee
 // @match        https://myte.accenture.com/*
@@ -22,11 +22,14 @@
     const NOTICE_ANIMATION_MS = 1000;
     const VACATION_CODES = [
       '900X00', // Regular Vacation
+      '917X00', // Maternity Leave
       '950X00', // Personal Illness
       '983X00', // Z Unpaid Absence
       '984X00', // Childecare Leave_Unpaid
+      '999X00', // Flex Time
       '140Z01', // Female Leave_Paid
       '140Z02', // Female Leave_Unpaid
+      '140Z03', // Medical Exam
       '731Z21', // Marrage Leave
       '734Z21', // Mother's Welfare Leave
       '735Z22', // Mother's Welfare Leave Hospital
@@ -304,8 +307,9 @@
 
     async function startProcess() {
         setDialogControlsDisabled(true);
-        setRunningNotice("myTE Auto-Filler is running...", "running");
-        logStatus("Starting auto fill...");
+        setRunningNotice("myTE Auto-Filler is running...", "running", 2000);
+        await sleep(50);
+        logStatus("Starting auto fill...",);
 
         try {
             const syncOt = document.getElementById("sync-ot")?.checked;
@@ -381,6 +385,13 @@
             setRunningNotice("Done!", "success", 1800);
 
             const dialog = document.getElementById("myte-tools-dialog");
+
+            const dataConf = dialog?.dataset.conf ? JSON.parse(dialog.dataset.conf) : {};
+            if (!!dataConf.autoSave) {
+                await sleep(300);
+                await clickSaveIfAvailable();
+             }
+
             if (dialog?.open) {
                 dialog.close();
             }
@@ -395,7 +406,7 @@
 
     async function resetHoursProcess() {
         setDialogControlsDisabled(true);
-        setRunningNotice("myTE hour entries are being reset...", "running");
+        setRunningNotice("myTE hour entries are being reset...", "running", 2000);
         logStatus("Starting reset...");
 
         try {
@@ -428,14 +439,17 @@
                 }
             }
 
-            // あえて保存ボタンはクリックせず、ユーザーが内容を確認してから手動で保存できるようにする
-            // await sleep(300);
-            // await clickSaveIfAvailable();
-
             logStatus(`Reset complete: ${clearedRowCount} rows`);
             setRunningNotice(`Reset complete: ${clearedRowCount} rows`, "success", 2200);
 
             const dialog = document.getElementById("myte-tools-dialog");
+
+            const dataConf = dialog?.dataset.conf ? JSON.parse(dialog.dataset.conf) : {};
+            if (!!dataConf.autoSave) {
+                await sleep(300);
+                await clickSaveIfAvailable();
+            }
+
             if (dialog?.open) {
               dialog.close();
             }
@@ -471,7 +485,7 @@
         `;
     }
 
-    function getOrCreateDialog() {
+    function getOrCreateDialog(dataConf = null) {
         let dialog = document.getElementById("myte-tools-dialog");
         if (dialog) {
             return dialog;
@@ -500,6 +514,12 @@
             closeButton.onclick = () => dialog.close();
         }
 
+        if (dataConf) {
+            dialog.dataset.conf = JSON.stringify(dataConf);
+        }
+
+        dialog.onclose = () => dialog.dataset.conf = "";
+
         return dialog;
     }
 
@@ -507,7 +527,7 @@
         const button = document.createElement("button");
         button.id = "myte-tools-btn";
         button.style = "border:none; border-radius:20%; position:absolute; margin-left:150px;";
-        button.textContent = "🛸";
+        button.textContent = "⏰";
         button.onclick = () => {
             const dialog = getOrCreateDialog();
             if (!dialog.open) {
@@ -518,7 +538,70 @@
         titleElement.after(button);
     }
 
+    async function mountToolbarButton() {
+        const toolBarBtnGrp = document.querySelector('[role=toolbar] .btn-group');
+        if (!toolBarBtnGrp) {
+            return;
+        }
+
+        const btnDiv = document.createElement("div");
+        btnDiv.id = "myte-toolbar-buttons";
+        btnDiv.style = "display:flex; align-items:center; gap:6px; margin-left:6px;";
+        btnDiv.innerHTML = `
+            <button id="myte-toolbar-workhours-btn" style="border:none; border-radius:20%; cursor:pointer; font-size:18px; padding:4px; line-height:1;">⏰</button>
+            <span style="margin-left: 5px;margin-right: 5px;">|</span>
+            <button id="myte-toolbar-email-btn" style="border: none;border-radius: 20%; cursor:pointer; font-size:18px; padding:4px; line-height:1;">📧</button>
+        `;
+
+        toolBarBtnGrp.after(btnDiv);
+
+        const toolbarBtn = document.getElementById("myte-toolbar-workhours-btn");
+        if (toolbarBtn) {
+            toolbarBtn.addEventListener("click", async () => {
+                const workHoursHeader = document.querySelector("#working-hours-side-header");
+                if (workHoursHeader) {
+                    workHoursHeader.click();
+                    await sleep(300);
+                }
+
+                try {
+                    // await waitForSelector(".myte-accordion-title", 10000);
+                    await waitForSelector("#myte-tools-btn", 10000);
+                } catch (error) {
+                    console.warn(`${RUNTIME_PREFIX} Timeout waiting for accordion:`, error);
+                }
+
+                await sleep(100);
+                const btn = document.getElementById("myte-tools-btn");
+                if (btn) {
+                    btn.click();
+                }
+                await sleep(300);
+                const dialog = document.getElementById("myte-tools-dialog");
+                if (dialog) {
+                    dialog.dataset.conf = JSON.stringify({ autoSave: true });
+                }
+                // const dialog = getOrCreateDialog({ autoSave: true });
+                // dialog.innerHTML = buildDialogContent();
+                // if (!dialog.open) {
+                //     dialog.showModal();
+                // }
+            });
+        }
+    }
+
+    function handleToolbarUI() {
+        const toolBarBtnGrp = document.querySelector('[role=toolbar] .btn-group');
+        const existingBtn = document.getElementById("myte-toolbar-buttons");
+
+        if (toolBarBtnGrp && !existingBtn) {
+            mountToolbarButton();
+        }
+    }
+
     function handleUI() {
+        handleToolbarUI();
+
         const accordionTitle = document.querySelector(".myte-accordion-title");
         const existingButton = document.getElementById("myte-tools-btn");
         const dialog = document.getElementById("myte-tools-dialog");
