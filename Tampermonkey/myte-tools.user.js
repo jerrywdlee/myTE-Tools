@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.2.2
+// @version      1.2.4
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       jerrywdlee
 // @match        https://myte.accenture.com/*
@@ -39,6 +39,7 @@ to: 'to@example.com'
 cc:
     - 'cc@example.com'
     - 'cc2@example.com'
+subject: '[myTE] Period {{period}} Approval Request'
 ---
 
 Dear Team,
@@ -595,8 +596,11 @@ Best regards,
 
         const parsed = parseTemplateFrontMatter(rawTemplate);
         const period = getPeriodFromPage();
+        const subjectPeriod =
+            document.querySelector("#comboboxselect-period-dropdown .active")?.textContent?.trim() || period;
         const displayName = parsed.meta.displayName || "myTE User";
-        const subject = `[myTE] ${period} Period Approval Request from ${displayName}`;
+        const subjectTemplate = parsed.meta.subject || `[myTE] ${period} Period Approval Request from ${displayName}`;
+        const subject = String(subjectTemplate).replace(/\{\{\s*period\s*\}\}/gi, subjectPeriod);
         const screenshots = await captureEmailScreenshots();
         const bodies = buildEmailBodies(parsed.body, screenshots);
 
@@ -701,8 +705,8 @@ Best regards,
 
     async function startProcess() {
         setDialogControlsDisabled(true);
-        setRunningNotice("myTE Auto-Filler is running...", "running", 2000);
-        await sleep(50);
+        setRunningNotice("myTE Auto-Filler is running...", "running", 0);
+        await sleep(200);
         logStatus("Starting auto fill...",);
 
         try {
@@ -800,7 +804,7 @@ Best regards,
 
     async function resetHoursProcess() {
         setDialogControlsDisabled(true);
-        setRunningNotice("myTE hour entries are being reset...", "running", 2000);
+        setRunningNotice("myTE hour entries are being reset...", "running", 0);
         logStatus("Starting reset...");
 
         try {
