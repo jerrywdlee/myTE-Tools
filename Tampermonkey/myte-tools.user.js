@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.0.3
+// @version      1.2.2
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       jerrywdlee
 // @match        https://myte.accenture.com/*
@@ -9,17 +9,53 @@
 // @supportURL   https://github.com/jerrywdlee/myTE-Tools/issues
 // @downloadURL  https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-tools.user.js
 // @updateURL    https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-tools.user.js
-// @grant        none
+// @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
+// @require      https://cdn.jsdelivr.net/npm/js-yaml@4.1.1/dist/js-yaml.min.js
+// @require      https://cdn.jsdelivr.net/npm/marked@18.0.0/lib/marked.umd.min.js
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function () {
     "use strict";
 
-    const UI_INTERVAL_MS = 1000;
+    const UI_INTERVAL_MS = 500;
     const WORKING_GRID_SELECTOR = "#workingHoursPunchClockGrid .ag-row";
     const RUNTIME_PREFIX = "[myTE Tools]";
     const NOTICE_ID = "helper-running-notice";
     const NOTICE_ANIMATION_MS = 1000;
+    const EMAIL_TEMPLATE_STORAGE_KEY = "myte-email-template-v1";
+    // const EMAIL_CAPTURE_SELECTOR = "div.content-wrap";
+    const EMAIL_CAPTURE_SELECTOR = "myte-app";
+    const EMAIL_TAB_STEPS = [
+            { name: "Summary", cid: "cid-summary-image", tabId: "summary" },
+            { name: "Time", cid: "cid-time-image", tabId: "time" },
+            { name: "Expenses", cid: "cid-expenses-image", tabId: "expenses" },
+            { name: "Adjustments", cid: "cid-adjustments-image", tabId: "adjustments" },
+    ];
+    const DEFAULT_EMAIL_TEMPLATE = `---
+from: 'from@example.com'
+to: 'to@example.com'
+cc:
+    - 'cc@example.com'
+    - 'cc2@example.com'
+---
+
+Dear Team,
+
+This is a reminder to submit your working hours for this week. 
+
+## Summary
+{{Summary}}
+## Time
+{{Time}}
+## Expenses
+{{Expenses}}
+## Adjustments
+{{Adjustments}}
+
+Best regards,
+`;
     const VACATION_CODES = [
       '900X00', // Regular Vacation
       '917X00', // Maternity Leave
@@ -33,7 +69,7 @@
       '731Z21', // Marrage Leave
       '734Z21', // Mother's Welfare Leave
       '735Z22', // Mother's Welfare Leave Hospital
-    ]
+        ];
 
     function logStatus(message) {
         console.log(`${RUNTIME_PREFIX} ${message}`);
@@ -282,6 +318,364 @@
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    function gmGetValueSafe(key, defaultValue) {
+        try {
+            if (typeof GM_getValue === "function") {
+                return GM_getValue(key, defaultValue);
+            }
+        } catch (error) {
+            console.warn(`${RUNTIME_PREFIX} GM_getValue failed:`, error);
+        }
+        return defaultValue;
+    }
+
+    function gmSetValueSafe(key, value) {
+        try {
+            if (typeof GM_setValue === "function") {
+                GM_setValue(key, value);
+                return;
+            }
+        } catch (error) {
+            console.warn(`${RUNTIME_PREFIX} GM_setValue failed:`, error);
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function parseTemplateFrontMatter(templateText) {
+        const source = String(templateText || "");
+        const normalized = source.replace(/\r\n/g, "\n");
+        const lines = normalized.split("\n");
+
+        if (lines[0]?.trim() !== "---") {
+            return { meta: {}, body: normalized };
+        }
+
+        const closingIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+        if (closingIndex < 0) {
+            return { meta: {}, body: normalized };
+        }
+
+        const yamlPart = lines.slice(1, closingIndex).join("\n");
+        const bodyPart = lines.slice(closingIndex + 1).join("\n");
+        let meta = {};
+        try {
+            meta = typeof jsyaml !== "undefined" ? jsyaml.load(yamlPart) || {} : {};
+        } catch (error) {
+            throw new Error(`Invalid YAML frontmatter: ${error.message}`);
+        }
+
+        if (!Array.isArray(meta.cc)) {
+            if (typeof meta.cc === "string" && meta.cc.trim()) {
+                meta.cc = meta.cc
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+            } else {
+                meta.cc = [];
+            }
+        }
+
+        return { meta, body: bodyPart };
+    }
+
+    function markdownToHtml(markdown) {
+        if (typeof marked === "undefined") {
+            return `<p>${escapeHtml(markdown || "")}</p>`;
+        }
+
+        return marked.parse(String(markdown || ""));
+    }
+
+    function markdownToPlainText(markdown) {
+        return String(markdown || "")
+            .replace(/\r\n/g, "\n")
+            .replace(/\*\*([^*]+)\*\*/g, "$1")
+            .replace(/\*([^*]+)\*/g, "$1")
+            .replace(/`([^`]+)`/g, "$1")
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+            .replace(/^#{1,6}\s*/gm, "")
+            .replace(/^[-*]\s+/gm, "- ")
+            .trim();
+    }
+
+    function getSavedEmailTemplate() {
+        return gmGetValueSafe(EMAIL_TEMPLATE_STORAGE_KEY, DEFAULT_EMAIL_TEMPLATE) || DEFAULT_EMAIL_TEMPLATE;
+    }
+
+    function getPeriodFromPage() {
+        const periodElement = document.querySelector("div.item.active");
+        if (!periodElement) {
+            return "UnknownPeriod";
+        }
+
+        const text = periodElement.innerText.trim();
+        const matched = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+        if (!matched) {
+            return text || "UnknownPeriod";
+        }
+
+        const year = matched[1];
+        const month = matched[2].padStart(2, "0");
+        const day = matched[3].padStart(2, "0");
+        return `${year}/${month}/${day}`;
+    }
+
+    async function capturePageAsBase64Png() {
+        if (typeof html2canvas !== "function") {
+            throw new Error("html2canvas is not available");
+        }
+
+        const target = document.querySelector(EMAIL_CAPTURE_SELECTOR);
+        if (!target) {
+            throw new Error(`Capture target not found: ${EMAIL_CAPTURE_SELECTOR}`);
+        }
+
+        await sleep(50);
+
+        const canvas = await html2canvas(target, {
+            scale: 1.3,
+            useCORS: true,
+            logging: false,
+            // backgroundColor: "#ffffff",
+        });
+        const dataUrl = canvas.toDataURL("image/png");
+        return dataUrl.split(",")[1];
+    }
+
+    async function captureEmailScreenshots() {
+        const results = [];
+
+        for (const step of EMAIL_TAB_STEPS) {
+            const tab = document.getElementById(step.tabId);
+            if (tab) {
+                tab.click();
+            }
+
+            console.log(`${RUNTIME_PREFIX} Navigated to ${step.name} tab, waiting for content to load...`);
+
+            await sleep(1500);
+            // await waitForSelector(EMAIL_CAPTURE_SELECTOR, 2000); // Very bad idea
+            let time = new Date().getTime();
+            console.log(`Capture start ${step.name}`);
+            const base64 = await capturePageAsBase64Png();
+            console.log(`Capture end ${step.name}, duration: ${new Date().getTime() - time}ms`);
+            results.push({ ...step, base64 });
+        }
+
+        const defaultTab = document.getElementById(EMAIL_TAB_STEPS[1].tabId);
+        if (defaultTab) {
+            defaultTab.click();
+        }
+
+        return results;
+    }
+
+    function wrapBase64ForMime(base64) {
+        return String(base64 || "").replace(/(.{76})/g, "$1\r\n");
+    }
+
+    function buildEmailBodies(templateBody, screenshotResults) {
+        let htmlTemplate = String(templateBody || "");
+        let plainTemplate = String(templateBody || "");
+
+        for (const item of screenshotResults) {
+            const token = `{{${item.name}}}`;
+            const imageHtml = `\n<div style="text-align:center; margin:16px 0;"><img style="display:inline-block; width:80%; max-width:1400px; height:auto;" alt="${item.name}" src="cid:${item.cid}"></div>\n`;
+            htmlTemplate = htmlTemplate.split(token).join(imageHtml);
+            plainTemplate = plainTemplate.split(token).join(`[${item.name}: cid:${item.cid}]`);
+        }
+
+        let htmlBody = markdownToHtml(htmlTemplate);
+
+        return {
+            plainBody: markdownToPlainText(plainTemplate),
+            htmlBody,
+        };
+    }
+
+    function buildEmlText(meta, plainBody, htmlBody, screenshotResults) {
+        const boundaryRelated = `_rel_${Date.now()}`;
+        const boundaryAlt = `_alt_${Date.now()}`;
+        const dateHeader = new Date().toUTCString();
+        const from = meta.from || "";
+        const to = meta.to || "";
+        const cc = Array.isArray(meta.cc) ? meta.cc.filter(Boolean) : [];
+        const subject = meta.subject || "[myTE] Period Approval Request";
+
+        let eml = "";
+        eml += `From: ${from}\r\n`;
+        eml += `To: ${to}\r\n`;
+        if (cc.length > 0) {
+            eml += `CC: ${cc.join(", ")}\r\n`;
+        }
+        eml += `Subject: ${subject}\r\n`;
+        eml += `Date: ${dateHeader}\r\n`;
+        eml += "MIME-Version: 1.0\r\n";
+        eml += `Content-Type: multipart/related; boundary="${boundaryRelated}"; type="multipart/alternative"\r\n`;
+        eml += "Content-Language: en-US\r\n\r\n";
+
+        eml += `--${boundaryRelated}\r\n`;
+        eml += `Content-Type: multipart/alternative; boundary="${boundaryAlt}"\r\n\r\n`;
+
+        eml += `--${boundaryAlt}\r\n`;
+        eml += 'Content-Type: text/plain; charset="utf-8"\r\n\r\n';
+        eml += `${plainBody}\r\n`;
+
+        eml += `--${boundaryAlt}\r\n`;
+        eml += 'Content-Type: text/html; charset="utf-8"\r\n\r\n';
+        eml += `<html><body>${htmlBody}</body></html>\r\n`;
+        eml += `--${boundaryAlt}--\r\n`;
+
+        for (const item of screenshotResults) {
+            eml += `--${boundaryRelated}\r\n`;
+            eml += `Content-Type: image/png; name="${item.name}.png"\r\n`;
+            eml += `Content-Description: ${item.name}.png\r\n`;
+            eml += `Content-Disposition: inline; filename="${item.name}.png"\r\n`;
+            eml += `Content-ID: <${item.cid}>\r\n`;
+            eml += "Content-Transfer-Encoding: base64\r\n\r\n";
+            eml += `${wrapBase64ForMime(item.base64)}\r\n`;
+        }
+
+        eml += `--${boundaryRelated}--\r\n`;
+        return eml;
+    }
+
+    function downloadEml(filename, emlText) {
+        const blob = new Blob([emlText], { type: "message/rfc822" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function buildEmailDialogContent(templateValue) {
+        return `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:8px;">
+                <div style="font-weight:bold; color:#7500c0; font-size:15px;">Email Template:</div>
+                <button id="btn-close-email-dialog" style="width:24px; height:24px; border:none; background:transparent; color:#7500c0; font-size:28px; cursor:pointer; line-height:1;" title="Close">&times;</button>
+            </div>
+            <div style="margin-bottom:14px;">
+                <textarea id="email-template-input" style="width:100%; height:280px; resize:vertical; border:1px solid #7500c0; border-radius:4px; padding:8px; font-family:Consolas, monospace; font-size:12px; box-sizing:border-box;">${escapeHtml(templateValue)}</textarea>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <button id="btn-reset-template" style="width:100%; background:white; color:#7500c0; border:1px solid #7500c0; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">Reset Template</button>
+                <button id="btn-download-email" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">Downlowd Email</button>
+            </div>
+        `;
+    }
+
+    function setEmailActionButtonsDisabled(disabled) {
+        const dialog = document.getElementById("myte-email-dialog");
+        if (!dialog) {
+            return;
+        }
+        ["#email-template-input", "#btn-reset-template", "#btn-download-email"].forEach((selector) => {
+            const element = dialog.querySelector(selector);
+            if (element) {
+                element.disabled = disabled;
+            }
+        });
+    }
+
+    async function generateEmailFromTemplate() {
+        const templateInput = document.getElementById("email-template-input");
+        const rawTemplate = templateInput?.value || DEFAULT_EMAIL_TEMPLATE;
+
+        const parsed = parseTemplateFrontMatter(rawTemplate);
+        const period = getPeriodFromPage();
+        const displayName = parsed.meta.displayName || "myTE User";
+        const subject = `[myTE] ${period} Period Approval Request from ${displayName}`;
+        const screenshots = await captureEmailScreenshots();
+        const bodies = buildEmailBodies(parsed.body, screenshots);
+
+        const eml = buildEmlText(
+            {
+                from: parsed.meta.from || "",
+                to: parsed.meta.to || "",
+                cc: parsed.meta.cc || [],
+                subject,
+            },
+            bodies.plainBody,
+            bodies.htmlBody,
+            screenshots,
+        );
+
+        const filename = `[myTE] ${period} Period Approval Request from ${displayName}.eml`;
+        downloadEml(filename, eml);
+    }
+
+    function getOrCreateEmailDialog() {
+        let dialog = document.getElementById("myte-email-dialog");
+        if (dialog) {
+            const templateInput = dialog.querySelector("#email-template-input");
+            if (templateInput && !templateInput.value.trim()) {
+                templateInput.value = getSavedEmailTemplate();
+            }
+            return dialog;
+        }
+
+        dialog = document.createElement("dialog");
+        dialog.id = "myte-email-dialog";
+        dialog.style =
+            "border:3px solid #7500c0; padding:18px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); width:760px; max-width:min(92vw, 760px); font-family:sans-serif; font-size:13px; background:white; color:#1f1f1f;";
+        dialog.innerHTML = buildEmailDialogContent(getSavedEmailTemplate());
+        document.body.appendChild(dialog);
+
+        const closeButton = dialog.querySelector("#btn-close-email-dialog");
+        const resetButton = dialog.querySelector("#btn-reset-template");
+        const downloadButton = dialog.querySelector("#btn-download-email");
+        const templateInput = dialog.querySelector("#email-template-input");
+
+        if (closeButton) {
+            closeButton.onclick = () => dialog.close();
+        }
+
+        if (resetButton && templateInput) {
+            resetButton.onclick = () => {
+                templateInput.value = DEFAULT_EMAIL_TEMPLATE;
+                gmSetValueSafe(EMAIL_TEMPLATE_STORAGE_KEY, DEFAULT_EMAIL_TEMPLATE);
+            };
+        }
+
+        if (templateInput) {
+            templateInput.addEventListener("blur", () => {
+                gmSetValueSafe(EMAIL_TEMPLATE_STORAGE_KEY, templateInput.value || DEFAULT_EMAIL_TEMPLATE);
+            });
+        }
+
+        if (downloadButton) {
+            downloadButton.onclick = async () => {
+                setEmailActionButtonsDisabled(true);
+                setRunningNotice("Generating email and screenshots...", "running", 0);
+                try {
+                    await generateEmailFromTemplate();
+                    setRunningNotice("");
+                    setRunningNotice("Email downloaded.", "success", 1800);
+                } catch (error) {
+                    console.error(`${RUNTIME_PREFIX} Email generation failed:`, error);
+                    setRunningNotice("");
+                    setRunningNotice("Email generation failed. Check console.", "error", 2600);
+                } finally {
+                    setEmailActionButtonsDisabled(false);
+                }
+            };
+        }
+
+        return dialog;
+    }
+
     async function clickSaveIfAvailable() {
         const buttons = Array.from(document.querySelectorAll("button"));
         const saveButton = buttons.find((button) => button.innerText.trim() === "Save");
@@ -479,8 +873,8 @@
                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;"><input type="checkbox" id="skip-vacations" checked><span style="font-weight:bold; color:#7500c0;">Skip Vacations</span></label>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                <button id="btn-start-fill" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">START FILLING</button>
                 <button id="btn-reset-hours" style="width:100%; background:white; color:#7500c0; border:1px solid #7500c0; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">RESET HOURS</button>
+                <button id="btn-start-fill" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">START FILLING</button>
             </div>
         `;
     }
@@ -538,9 +932,8 @@
         titleElement.after(button);
     }
 
-    async function mountToolbarButton() {
-        const toolBarBtnGrp = document.querySelector('[role=toolbar] .btn-group');
-        if (!toolBarBtnGrp) {
+    async function mountToolbarButton(targetElement) {
+        if (!targetElement) {
             return;
         }
 
@@ -553,7 +946,7 @@
             <button id="myte-toolbar-email-btn" style="border: none;border-radius: 20%; cursor:pointer; font-size:18px; padding:4px; line-height:1;">📧</button>
         `;
 
-        toolBarBtnGrp.after(btnDiv);
+        targetElement.after(btnDiv);
 
         const toolbarBtn = document.getElementById("myte-toolbar-workhours-btn");
         if (toolbarBtn) {
@@ -566,7 +959,8 @@
 
                 try {
                     // await waitForSelector(".myte-accordion-title", 10000);
-                    await waitForSelector("#myte-tools-btn", 10000);
+                    await waitForSelector("#myte-tools-btn", 2000);
+                    // await sleep(1200);
                 } catch (error) {
                     console.warn(`${RUNTIME_PREFIX} Timeout waiting for accordion:`, error);
                 }
@@ -588,14 +982,28 @@
                 // }
             });
         }
+
+        const emailBtn = document.getElementById("myte-toolbar-email-btn");
+        if (emailBtn) {
+            emailBtn.addEventListener("click", () => {
+                const dialog = getOrCreateEmailDialog();
+                const templateInput = dialog.querySelector("#email-template-input");
+                if (templateInput) {
+                    templateInput.value = getSavedEmailTemplate();
+                }
+                if (!dialog.open) {
+                    dialog.showModal();
+                }
+            });
+        }
     }
 
     function handleToolbarUI() {
-        const toolBarBtnGrp = document.querySelector('[role=toolbar] .btn-group');
+        const toolBarBtnGrp = document.querySelector('#acn-header-brand-title');
         const existingBtn = document.getElementById("myte-toolbar-buttons");
 
         if (toolBarBtnGrp && !existingBtn) {
-            mountToolbarButton();
+            mountToolbarButton(toolBarBtnGrp);
         }
     }
 
