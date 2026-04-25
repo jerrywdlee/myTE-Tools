@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 Languages: [English](../../README.md) | 日本語 | [简体中文](./README.zh-Hans.md)
 
 # myTE Tools (Tampermonkey)
@@ -7,7 +8,7 @@ Languages: [English](../../README.md) | 日本語 | [简体中文](./README.zh-H
 以下の2機能を1つのツールバーで提供します。
 
 - Working Hours 自動入力（残業連携・休暇スキップ対応）
-- EMLメール生成（Summary/Time/Expenses/Adjustments のスクリーンショット埋め込み）
+- Summary/Time/Expenses/Adjustments のスクリーンショット付きメールテンプレート機能
 
 ## 主な機能
 
@@ -17,35 +18,41 @@ Languages: [English](../../README.md) | 日本語 | [简体中文](./README.zh-H
 - Working Hours の Work/Break/Work 行を自動入力
 - Daily Overtime 行から残業時間を自動連携（任意）
 - 設定した休暇コードをスキップ（任意）
+- 次の4タブのスクリーンショットを本文付きでクリップボードへコピー
+  - Summary
+  - Time
+  - Expenses
+  - Adjustments
 - 次の4タブの画像を埋め込んだ `.eml` を生成
   - Summary
   - Time
   - Expenses
   - Adjustments
+- メールテンプレートをデフォルト状態にリセット
 - メールテンプレートを Tampermonkey ストレージに保存
 
 ## インストール
 
 1. ブラウザに `Tampermonkey` をインストールします。
-2. 拡張機能設定で次を有効化します。
+1. 拡張機能設定で次を有効化します。
    - Developer mode
    - Allow user scripts
 
 ![Extensions settings](../../public/images/Extensions.png)
 ![Allow user scripts](../../public/images/UserScript.png)
 
-3. 以下のURLを開きます。
+1. 以下のURLを開きます。
 
 ```text
 https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-tools.user.js
 ```
 
-4. Tampermonkeyのインストール画面で `Install` をクリックします。
-5. Tampermonkey上で `myTE Tools` スクリプトが有効（ON）になっていることを確認します。
+1. Tampermonkeyのインストール画面で `Install` をクリックします。
+1. Tampermonkey上で `myTE Tools` スクリプトが有効（ON）になっていることを確認します。
 
 ![Tampermonkey で myTE Tools を有効化](../../public/images/image.png)
 
-6. myTEをリロードして Working Hours 画面を開きます。
+1. myTEをリロードして Working Hours 画面を開きます。
 
 ## 使い方
 
@@ -55,29 +62,42 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 ![Header toolbar buttons](../../public/images/image-1.png)
 
-2. 必要に応じて (Work / Break / Work) の行を調整
+1. 必要に応じて (Work / Break / Work) の行を調整
 
 ![Sample generated email content](../../public/images/image-2.png)
 
-3. 必要に応じて以下のチェックボックスをON
-  - `Auto-sync Overtime`: 残業時間を自動的に反映する
-  - `Skip Vacations`: 有給など休みが入った日に対して、自動記入しない
-4. `START FILLING` をクリック
-5. 完了通知を待つ
+1. 必要に応じて以下のチェックボックスをON
 
-### Email EML (`📧`)
+- `Auto-sync Overtime`: 残業時間を自動的に反映する
+- `Skip Vacations`: 有給など休みが入った日に対して、自動記入しない
+
+1. `START FILLING` をクリック
+1. 完了通知を待つ
+
+### Email Tools (`📧`)
 
 1. ツールバーの `📧` をクリック
 
 ![Header toolbar buttons](../../public/images/image-1.png)
 
-2. YAML frontmatter + Markdown テンプレートを編集
+1. YAML frontmatter + Markdown テンプレートを編集
 
 ![Sample generated email content](../../public/images/image-3.png)
 
-3. `Download Email` をクリック
-4. 4タブをキャプチャした `.eml` がダウンロードされます
+1. ダイアログ内のいずれかの操作を使います
 
+- `Reset Template`: デフォルトテンプレートへ戻し、そのまま保存します。
+- `Copy Content`: 4タブをキャプチャし、プレースホルダーをスクリーンショットに置き換えた本文をクリップボードへコピーし、完了後にアラートを表示します。
+- `Downlowd Email`: 4タブをキャプチャし、画像埋め込み済みの `.eml` をダウンロードします。
+
+1. コピーまたはダウンロード対象には次のスクリーンショットが含まれます
+
+- Summary
+- Time
+- Expenses
+- Adjustments
+
+1. テンプレートはテキストエリアからフォーカスが外れた時点で自動保存されます
 
 ### Emailテンプレートの書き方
 
@@ -132,6 +152,7 @@ regards,
 本文のプレースホルダー:
 
 - `{{Summary}}`, `{{Time}}`, `{{Expenses}}`, `{{Adjustments}}` は、HTMLメール本文でキャプチャ画像に置換されます
+- `Copy Content` では、スクリーンショットがクリップボード内でインライン画像として埋め込まれます
 
 ## 更新について
 
