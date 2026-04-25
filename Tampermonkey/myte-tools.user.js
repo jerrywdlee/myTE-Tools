@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.2.4
+// @version      1.3.4
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       jerrywdlee
 // @match        https://myte.accenture.com/*
@@ -14,6 +14,7 @@
 // @require      https://cdn.jsdelivr.net/npm/marked@18.0.0/lib/marked.umd.min.js
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_setClipboard
 // ==/UserScript==
 
 (function () {
@@ -570,9 +571,10 @@ Best regards,
             <div style="margin-bottom:14px;">
                 <textarea id="email-template-input" style="width:100%; height:280px; resize:vertical; border:1px solid #7500c0; border-radius:4px; padding:8px; font-family:Consolas, monospace; font-size:12px; box-sizing:border-box;">${escapeHtml(templateValue)}</textarea>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
                 <button id="btn-reset-template" style="width:100%; background:white; color:#7500c0; border:1px solid #7500c0; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">Reset Template</button>
                 <button id="btn-download-email" style="width:100%; background:#7500c0; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">Downlowd Email</button>
+                <button id="btn-copy-email-content" style="width:100%; background:#ff6d00; color:white; border:none; padding:12px; cursor:pointer; border-radius:6px; font-weight:bold;">Copy Content</button>
             </div>
         `;
     }
@@ -582,12 +584,68 @@ Best regards,
         if (!dialog) {
             return;
         }
-        ["#email-template-input", "#btn-reset-template", "#btn-download-email"].forEach((selector) => {
+        ["#email-template-input", "#btn-reset-template", "#btn-copy-email-content", "#btn-download-email"].forEach((selector) => {
             const element = dialog.querySelector(selector);
             if (element) {
                 element.disabled = disabled;
             }
         });
+    }
+
+    function normalizeHtmlToPlainText(rawContent) {
+        const normalized = String(rawContent || "")
+            .trim()
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<div[^>]*>/gi, "\n")
+            .replace(/<\/div>/gi, "")
+            .replace(/<p[^>]*>/gi, "\n")
+            .replace(/<\/p>/gi, "")
+            .replace(/&nbsp;/gi, " ");
+
+        const plain = normalized.replace(/<[^>]+>/g, "");
+        const decoder = document.createElement("textarea");
+        decoder.innerHTML = plain;
+        return decoder.value;
+    }
+
+    function copyHtmlAndPlainToClipboard(rawHtml) {
+        if (typeof GM_setClipboard !== "function") {
+            throw new Error("GM_setClipboard is not available");
+        }
+
+        const plain = normalizeHtmlToPlainText(rawHtml);
+        const stablePlain = plain.replace(/^$/gm, " ");
+        const html = `<div style="font-family: sans-serif; line-height: 1.6;">${rawHtml}</div>`;
+
+        try {
+            GM_setClipboard(stablePlain, { type: "text", mimetype: "text/plain" });
+        } catch (error) {
+            GM_setClipboard(stablePlain, "text");
+        }
+
+        try {
+            GM_setClipboard(html, { type: "html", mimetype: "text/html" });
+        } catch (error) {
+            GM_setClipboard(html, "html");
+        }
+    }
+
+    async function copyEmailContentFromTemplate() {
+        const templateInput = document.getElementById("email-template-input");
+        const rawTemplate = templateInput?.value || DEFAULT_EMAIL_TEMPLATE;
+        const parsed = parseTemplateFrontMatter(rawTemplate);
+
+        // Keep the same flow as email download: capture screenshots first,
+        // then compose the final body content from the template.
+        const screenshots = await captureEmailScreenshots();
+        const bodies = buildEmailBodies(parsed.body, screenshots);
+
+        // Replace cid: references with inline data URIs for clipboard
+        let clipboardHtml = bodies.htmlBody;
+        for (const item of screenshots) {
+            clipboardHtml = clipboardHtml.split(`cid:${item.cid}`).join(`data:image/png;base64,${item.base64}`);
+        }
+        copyHtmlAndPlainToClipboard(clipboardHtml);
     }
 
     async function generateEmailFromTemplate() {
@@ -639,6 +697,7 @@ Best regards,
 
         const closeButton = dialog.querySelector("#btn-close-email-dialog");
         const resetButton = dialog.querySelector("#btn-reset-template");
+        const copyButton = dialog.querySelector("#btn-copy-email-content");
         const downloadButton = dialog.querySelector("#btn-download-email");
         const templateInput = dialog.querySelector("#email-template-input");
 
@@ -657,6 +716,25 @@ Best regards,
             templateInput.addEventListener("blur", () => {
                 gmSetValueSafe(EMAIL_TEMPLATE_STORAGE_KEY, templateInput.value || DEFAULT_EMAIL_TEMPLATE);
             });
+        }
+
+        if (copyButton) {
+            copyButton.onclick = async () => {
+                setEmailActionButtonsDisabled(true);
+                setRunningNotice("Generating screenshots and copying email body...", "running", 0);
+                try {
+                    await copyEmailContentFromTemplate();
+                    setRunningNotice("");
+                    setRunningNotice("Email body copied.", "success", 1800);
+                    alert("Email body copied to clipboard.");
+                } catch (error) {
+                    console.error(`${RUNTIME_PREFIX} Email content copy failed:`, error);
+                    setRunningNotice("");
+                    setRunningNotice("Email content copy failed. Check console.", "error", 2600);
+                } finally {
+                    setEmailActionButtonsDisabled(false);
+                }
+            };
         }
 
         if (downloadButton) {
