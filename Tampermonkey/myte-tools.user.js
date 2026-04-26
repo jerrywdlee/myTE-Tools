@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.3.4
+// @version      1.4.3
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
-// @author       jerrywdlee
+// @author       Julia Lee (@jerrywdlee)
 // @match        https://myte.accenture.com/*
+// @match        https://avanade.sharepoint.com/teams/avanavi/myOT/Lists/myOT/NewForm*
 // @homepageURL  https://github.com/jerrywdlee/myTE-Tools
 // @supportURL   https://github.com/jerrywdlee/myTE-Tools/issues
 // @downloadURL  https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-tools.user.js
@@ -26,6 +27,9 @@
     const NOTICE_ID = "helper-running-notice";
     const NOTICE_ANIMATION_MS = 1000;
     const EMAIL_TEMPLATE_STORAGE_KEY = "myte-email-template-v1";
+    const OVERTIME_HISTORY_STORAGE_KEY = "myte-overtime-history-v1";
+    const OVERTIME_HISTORY_MAX = 12;
+    const OVERTIME_FILL_FORM_STORAGE_KEY = "myte-ot-fill-form-v1";
     // const EMAIL_CAPTURE_SELECTOR = "div.content-wrap";
     const EMAIL_CAPTURE_SELECTOR = "myte-app";
     const EMAIL_TAB_STEPS = [
@@ -177,6 +181,71 @@ Best regards,
 
         console.log(`${RUNTIME_PREFIX} Parsed Overtime Map:`, overtimeMap);
         return overtimeMap;
+    }
+
+    function saveOvertimeHistory(period, overtimeMap) {
+        const periodText = String(period || "").trim();
+        if (!periodText) {
+            return 0;
+        }
+
+        const stored = gmGetValueSafe(OVERTIME_HISTORY_STORAGE_KEY, []);
+        const history = Array.isArray(stored) ? stored.slice() : [];
+
+        const nextHistory = history.filter((item) => {
+            if (!item || typeof item !== "object") {
+                return false;
+            }
+            if (typeof item.period !== "string") {
+                return false;
+            }
+            return item.period !== periodText;
+        });
+
+        nextHistory.push({
+            period: periodText,
+            overtimeMap: overtimeMap && typeof overtimeMap === "object" ? { ...overtimeMap } : {},
+            savedAt: Date.now(),
+        });
+
+        const trimmedHistory = nextHistory.slice(-OVERTIME_HISTORY_MAX);
+        gmSetValueSafe(OVERTIME_HISTORY_STORAGE_KEY, trimmedHistory);
+        return trimmedHistory.length;
+    }
+
+    function getOvertimeHistoryNewestFirst() {
+        const stored = gmGetValueSafe(OVERTIME_HISTORY_STORAGE_KEY, []);
+        const history = Array.isArray(stored) ? stored.slice() : [];
+
+        return history
+            .filter((item) => item && typeof item === "object" && typeof item.period === "string")
+            .sort((a, b) => (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0));
+    }
+
+    function getSavedOvertimeFillForm() {
+        const saved = gmGetValueSafe(OVERTIME_FILL_FORM_STORAGE_KEY, {});
+        if (!saved || typeof saved !== "object") {
+            return {
+                projectDesc: "",
+                wbs: "",
+                reason: "",
+            };
+        }
+
+        return {
+            projectDesc: String(saved.projectDesc || ""),
+            wbs: String(saved.wbs || ""),
+            reason: String(saved.reason || ""),
+        };
+    }
+
+    function saveOvertimeFillForm(formValues) {
+        const payload = {
+            projectDesc: String(formValues?.projectDesc || ""),
+            wbs: String(formValues?.wbs || ""),
+            reason: String(formValues?.reason || ""),
+        };
+        gmSetValueSafe(OVERTIME_FILL_FORM_STORAGE_KEY, payload);
     }
 
     function getVacationDaySet() {
@@ -791,6 +860,15 @@ Best regards,
             const syncOt = document.getElementById("sync-ot")?.checked;
             const skipVacations = document.getElementById("skip-vacations")?.checked;
             const overtimeMap = syncOt ? getOvertimeMap() : {};
+            const period = getPeriodFromPage();
+
+            if (syncOt) {
+                const savedCount = saveOvertimeHistory(period, overtimeMap);
+                setRunningNotice(`Overtime record saved (${savedCount}/${OVERTIME_HISTORY_MAX})`, "success", 1800);
+                await sleep(250);
+                setRunningNotice("myTE Auto-Filler is running...", "running", 0);
+            }
+
             const vacationDays = skipVacations ? getVacationDaySet() : new Set();
 
             const baseR2End = parseInt(document.getElementById("in-r2e")?.value || "18", 10);
@@ -961,6 +1039,205 @@ Best regards,
         `;
     }
 
+    function buildOvertimeFillDialogContent(periodOptions, formValues) {
+        const periodOptionsHtml = periodOptions.length > 0
+            ? periodOptions
+                  .map((period, index) => `<option value="${escapeHtml(period)}"${index === 0 ? " selected" : ""}>${escapeHtml(period)}</option>`)
+                  .join("")
+            : '<option value="">No Overtime History</option>';
+
+        return `
+            <div style="position:relative; display:flex; align-items:center; gap:12px; margin-bottom:12px; border-bottom:1px solid #f2d4b8; padding:0 34px 8px 0;">
+                <div style="font-weight:700; color:#c24e00; font-size:16px; font-family:'Segoe UI', sans-serif;">Fill Overtime:</div>
+                <button id="btn-close-ot-fill-dialog" style="position:absolute; top:-2px; right:0; min-width:15px; height:24px; border:none; background:transparent; color:#a24300; font-size:20px; cursor:pointer; line-height:1; padding:0;" title="Close">&times;</button>
+            </div>
+            <div style="display:grid; grid-template-columns:108px 1fr; align-items:center; row-gap:10px; column-gap:12px; margin-bottom:14px; font-family:'Segoe UI', sans-serif; font-size:13px; color:#6b4a2f;">
+                <label for="ot-fill-period">Period:</label>
+                <select id="ot-fill-period" style="height:36px; padding:0 10px; border:2px solid #d39d73; border-radius:8px; color:#3f2b1a; font-size:13px;">${periodOptionsHtml}</select>
+
+                <label for="ot-fill-project-desc">Project desc:</label>
+                <input id="ot-fill-project-desc" type="text" value="${escapeHtml(formValues.projectDesc)}" placeholder="Current Proj" style="height:36px; padding:0 10px; border:2px solid #d39d73; border-radius:8px; color:#3f2b1a; font-size:13px;" />
+
+                <label for="ot-fill-wbs">WBS:</label>
+                <input id="ot-fill-wbs" type="text" value="${escapeHtml(formValues.wbs)}" placeholder="WBS Code" style="height:36px; padding:0 10px; border:2px solid #d39d73; border-radius:8px; color:#3f2b1a; font-size:13px;" />
+
+                <label for="ot-fill-reason" style="align-self:start; padding-top:6px;">Reason:</label>
+                <textarea id="ot-fill-reason" placeholder="Reason..." style="height:96px; resize:vertical; padding:8px 10px; border:2px solid #d39d73; border-radius:16px; color:#3f2b1a; font-size:13px; font-family:'Segoe UI', sans-serif;">${escapeHtml(formValues.reason)}</textarea>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <button id="btn-clear-ot-fill" style="width:100%; background:#ffffff; color:#7c3c10; border:2px solid #d39d73; padding:9px; cursor:pointer; border-radius:8px; font-weight:700; font-size:14px;">Clear</button>
+                <button id="btn-run-ot-fill" style="width:100%; background:#ff7a00; color:white; border:2px solid #ff7a00; padding:9px; cursor:pointer; border-radius:8px; font-weight:700; font-size:14px;">Fill</button>
+            </div>
+        `;
+    }
+
+    function setFieldValueWithEvents(element, value) {
+        if (!element) {
+            return;
+        }
+
+        element.value = value;
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+        element.dispatchEvent(new Event("blur", { bubbles: true }));
+    }
+
+    function formatMyOtDate(period, dayNum) {
+        const periodText = String(period || "").trim();
+        const day = parseInt(String(dayNum || ""), 10);
+        const matched = periodText.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+
+        if (!matched || Number.isNaN(day)) {
+            return "";
+        }
+
+        const year = parseInt(matched[1], 10);
+        const month = parseInt(matched[2], 10);
+        return `${month}/${day}/${year}`;
+    }
+
+    function refreshOvertimeFillDialogFields(dialog) {
+        if (!dialog) {
+            return;
+        }
+
+        const history = getOvertimeHistoryNewestFirst();
+        const periodOptions = history.map((item) => item.period);
+        const formValues = getSavedOvertimeFillForm();
+        dialog.innerHTML = buildOvertimeFillDialogContent(periodOptions, formValues);
+
+        const closeBtn = dialog.querySelector("#btn-close-ot-fill-dialog");
+        const clearBtn = dialog.querySelector("#btn-clear-ot-fill");
+        const fillBtn = dialog.querySelector("#btn-run-ot-fill");
+        const projectDescInput = dialog.querySelector("#ot-fill-project-desc");
+        const wbsInput = dialog.querySelector("#ot-fill-wbs");
+        const reasonInput = dialog.querySelector("#ot-fill-reason");
+        const periodSelect = dialog.querySelector("#ot-fill-period");
+
+        const persistFormFields = () => {
+            saveOvertimeFillForm({
+                projectDesc: projectDescInput?.value || "",
+                wbs: wbsInput?.value || "",
+                reason: reasonInput?.value || "",
+            });
+        };
+
+        [projectDescInput, wbsInput, reasonInput].forEach((field) => {
+            if (field) {
+                field.addEventListener("blur", persistFormFields);
+            }
+        });
+
+        if (closeBtn) {
+            closeBtn.onclick = () => dialog.close();
+        }
+
+        if (clearBtn) {
+            clearBtn.onclick = () => {
+                if (periodSelect && periodSelect.options.length > 0) {
+                    periodSelect.selectedIndex = 0;
+                }
+                if (projectDescInput) {
+                    projectDescInput.value = "";
+                }
+                if (wbsInput) {
+                    wbsInput.value = "";
+                }
+                if (reasonInput) {
+                    reasonInput.value = "";
+                }
+                persistFormFields();
+            };
+        }
+
+        if (fillBtn) {
+            fillBtn.onclick = async () => {
+                const selectedPeriod = periodSelect?.value || "";
+                const selectedHistory = history.find((item) => item.period === selectedPeriod);
+                const overtimeMap = selectedHistory?.overtimeMap || {};
+                const projectDesc = projectDescInput?.value || "";
+                const wbs = wbsInput?.value || "";
+                const reason = reasonInput?.value || "";
+
+                const overtimeEntries = Object.entries(overtimeMap)
+                    .map(([dayKey, overtime]) => [dayKey, Number(overtime)] )
+                    .filter(([, overtime]) => Number.isFinite(overtime) && overtime > 0)
+                    .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10));
+
+                if (!selectedPeriod || overtimeEntries.length === 0) {
+                    setRunningNotice("No overtime data for selected period.", "error", 2200);
+                    return;
+                }
+
+                const tab1Link = document.querySelector('#onetIDListForm a[href="#Tab1"]');
+                if (tab1Link) {
+                    tab1Link.click();
+                }
+                await sleep(500);
+
+                const tab1 = document.querySelector("#Tab1");
+                if (!tab1) {
+                    setRunningNotice("Tab1 not found.", "error", 2200);
+                    return;
+                }
+
+                const dateInputs = Array.from(tab1.querySelectorAll('input[id*="Date"]'));
+                const hourInputs = Array.from(tab1.querySelectorAll('input[id*="Hour"]'));
+                const projectDescAreas = Array.from(tab1.querySelectorAll('textarea[id*="Project_desc"]'));
+                const wbsInputs = Array.from(tab1.querySelectorAll('input[id*="WBS"]'));
+                const reasonAreas = Array.from(tab1.querySelectorAll('textarea[id*="Reason"]'));
+
+                const maxRows = Math.min(
+                    overtimeEntries.length,
+                    dateInputs.length,
+                    hourInputs.length,
+                    projectDescAreas.length,
+                    wbsInputs.length,
+                    reasonAreas.length,
+                );
+
+                for (let i = 0; i < maxRows; i += 1) {
+                    const [dayNum, overtime] = overtimeEntries[i];
+                    const formattedDate = formatMyOtDate(selectedPeriod, dayNum);
+                    setFieldValueWithEvents(dateInputs[i], formattedDate);
+                    setFieldValueWithEvents(hourInputs[i], String(overtime));
+                    setFieldValueWithEvents(projectDescAreas[i], projectDesc);
+                    setFieldValueWithEvents(wbsInputs[i], wbs);
+                    setFieldValueWithEvents(reasonAreas[i], reason);
+                }
+
+                console.log(`${RUNTIME_PREFIX} Overtime fill completed:`, {
+                    period: selectedPeriod,
+                    filledRows: maxRows,
+                    availableRows: {
+                        date: dateInputs.length,
+                        hour: hourInputs.length,
+                        projectDesc: projectDescAreas.length,
+                        wbs: wbsInputs.length,
+                        reason: reasonAreas.length,
+                    },
+                });
+
+                setRunningNotice(`Filled ${maxRows} overtime row(s).`, "success", 2200);
+                dialog.close();
+            };
+        }
+    }
+
+    function getOrCreateOvertimeFillDialog() {
+        let dialog = document.getElementById("myte-ot-fill-dialog");
+        if (!dialog) {
+            dialog = document.createElement("dialog");
+            dialog.id = "myte-ot-fill-dialog";
+            dialog.style =
+                "border:3px solid #ff7a00; padding:14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.3); width:680px; max-width:min(92vw, 680px); font-family:'Segoe UI', sans-serif; font-size:13px; color:#1f1f1f;";
+            document.body.appendChild(dialog);
+        }
+
+        refreshOvertimeFillDialogFields(dialog);
+        return dialog;
+    }
+
     function getOrCreateDialog(dataConf = null) {
         let dialog = document.getElementById("myte-tools-dialog");
         if (dialog) {
@@ -1012,6 +1289,40 @@ Best regards,
         };
 
         titleElement.after(button);
+    }
+
+    function mountOvertimeFillButton() {
+        // const tab1 = document.querySelector("#Tab1");
+        // const totalHours = tab1?.querySelector("#TotalHours");
+        // const dialogTitleSpan = document.querySelector('#dialogTitleSpan');
+        // const dialogContainer = document.querySelector('#HillbillyTabify');
+        const form = document.querySelector('form[action*=myOT]');
+        const dialogContainer = form?.parentElement;
+        const existingButton = document.getElementById("myot-fill-btn");
+
+        if (!dialogContainer) {
+            if (existingButton) {
+                existingButton.remove();
+            }
+            return;
+        }
+
+        if (existingButton) {
+            return;
+        }
+
+        const button = document.createElement("button");
+        button.id = "myot-fill-btn";
+        button.style = "border:none; border-radius:10%; min-width:30px; padding:3px; font-size:16px; cursor:pointer; position:absolute; z-index: 5000; left: 260px; top: 12px;";
+        button.textContent = "📝";
+        button.onclick = () => {
+            const dialog = getOrCreateOvertimeFillDialog();
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        };
+
+        dialogContainer.append(button);
     }
 
     async function mountToolbarButton(targetElement) {
@@ -1091,6 +1402,7 @@ Best regards,
 
     function handleUI() {
         handleToolbarUI();
+        mountOvertimeFillButton();
 
         const accordionTitle = document.querySelector(".myte-accordion-title");
         const existingButton = document.getElementById("myte-tools-btn");
