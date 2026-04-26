@@ -3,21 +3,26 @@ Languages: [English](../../README.md) | 日本語 | [简体中文](./README.zh-H
 
 # myTE Tools (Tampermonkey)
 
-`myTE Tools` は `https://myte.accenture.com/*` 向けの Tampermonkey ユーザースクリプトです。
+`myTE Tools` は `https://myte.accenture.com/*` と myOT フォーム向けの Tampermonkey ユーザースクリプトです。
 
-以下の2機能を1つのツールバーで提供します。
+以下の3機能を提供します。
 
 - Working Hours 自動入力（残業連携・休暇スキップ対応）
 - Summary/Time/Expenses/Adjustments のスクリーンショット付きメールテンプレート機能
+- 保存済み残業履歴を使った myOT Overtime クイック入力
 
 ## 主な機能
 
 - myTEヘッダーにツールバーを追加
   - `⏰` Working Hours ダイアログを開く
   - `📧` Email Template ダイアログを開く
+- myOT Overtime タブにクイック入力ボタンを追加
+  - `📝` Fill Overtime ダイアログを開く
 - Working Hours の Work/Break/Work 行を自動入力
 - Daily Overtime 行から残業時間を自動連携（任意）
 - 設定した休暇コードをスキップ（任意）
+- 期間ごとに残業履歴を保存（最大12件、最新順）
+- 選択した期間の残業データから myOT Overtime 行（Date/Hour/Project desc/WBS/Reason）を入力
 - 次の4タブのスクリーンショットを本文付きでクリップボードへコピー
   - Summary
   - Time
@@ -98,6 +103,30 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 - Adjustments
 
 1. テンプレートはテキストエリアからフォーカスが外れた時点で自動保存されます
+
+### myOT Overtime Fill (`📝`)
+
+1. myOT の New Item または Requested ページを開き、`Overtime` タブを開く
+
+![myOT Overtime tab](../../public/images/image-4.png)
+
+1. タイトル右側の `📝` をクリックして `Fill Overtime` ダイアログを開く
+1. 保存済み残業履歴から `Period` を選択（最新順）
+1. 必要に応じて以下を入力または更新
+
+- `Project desc`
+- `WBS`
+- `Reason`
+
+1. `Fill` をクリックして Tab1 の行へ反映
+
+![Fill Overtime dialog](../../public/images/image-5.png)
+
+補足:
+
+- `Project desc` / `WBS` / `Reason` は blur 時に Tampermonkey ストレージへ保存されます
+- `Clear` は `Period` を最新に戻し、他の入力をクリアします
+- 残業履歴は myTE Working Hours 自動入力フローで収集されます
 
 ### Emailテンプレートの書き方
 

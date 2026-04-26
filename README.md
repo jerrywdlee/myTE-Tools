@@ -3,21 +3,26 @@ Languages: English | [日本語](./docs/i18n/README.ja.md) | [简体中文](./do
 
 # myTE Tools (Tampermonkey)
 
-`myTE Tools` is a Tampermonkey userscript for `https://myte.accenture.com/*`.
+`myTE Tools` is a Tampermonkey userscript for `https://myte.accenture.com/*` and myOT list forms.
 
-It combines two features in one toolbar:
+It combines three features:
 
 - Working Hours auto-fill (with optional overtime sync and vacation skip)
 - Email template tools with Summary/Time/Expenses/Adjustments screenshots
+- myOT Overtime quick-fill from saved overtime history
 
 ## Features
 
 - Add toolbar buttons in myTE header:
   - `⏰` Open Working Hours dialog
   - `📧` Open Email Template dialog
+- Add a quick-fill button in myOT Overtime tab:
+  - `📝` Open Fill Overtime dialog
 - Auto-fill Work/Break/Work rows for Working Hours
 - Optional overtime synchronization from Daily Overtime row
 - Optional vacation skipping based on configured codes
+- Save overtime snapshots by period (up to 12 records, newest first)
+- Fill myOT Overtime rows (`Date/Hour/Project desc/WBS/Reason`) from selected period
 - Copy email body to clipboard with inline screenshots for:
   - Summary
   - Time
@@ -92,6 +97,28 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
    - Expenses
    - Adjustments
 3. The template is saved automatically when the textarea loses focus.
+
+### myOT Overtime Fill (`📝`)
+
+1. Open myOT New Item or Requested page, then open the `Overtime` tab.
+
+![myOT Overtime tab](./public/images/image-4.png)
+
+1. Click `📝` next to the dialog title to open `Fill Overtime`.
+1. Choose a `Period` from saved overtime history (newest first).
+1. Enter or update:
+  - `Project desc`
+  - `WBS`
+  - `Reason`
+1. Click `Fill` to populate Tab1 rows.
+
+![Fill Overtime dialog](./public/images/image-5.png)
+
+Notes:
+
+- `Project desc`, `WBS`, and `Reason` are saved on blur via Tampermonkey storage.
+- `Clear` resets `Period` to latest and clears other fields.
+- Overtime history is captured from myTE Working Hours autofill flow.
 
 ### Email template format
 
