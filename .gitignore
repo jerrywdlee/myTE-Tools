@@ -142,3 +142,4 @@ tmp/*
 /.harness_insights/
 
 .skills/
+.agents/

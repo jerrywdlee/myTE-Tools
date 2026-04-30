@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "harness-insight": {
+      "source": "jerrywdlee/Harness-Insight",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "e7e8c696786d875c212ac0a620e9cc25ebde1be89b8f1f2fcfbde95256388b05"
+    }
+  }
+}
