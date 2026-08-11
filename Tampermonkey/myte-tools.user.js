@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.5.1
+// @version      1.5.2
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       Julia Lee (@jerrywdlee)
 // @match        https://myte.accenture.com/*
@@ -1465,8 +1465,12 @@ Best regards,
 
     function handleUI() {
         handleToolbarUI();
-        mountOvertimeFillButton();
-        mountOvertimeFillButtonAlt();
+
+        if (location.hostname.includes("avanade.sharepoint.com")) {
+            mountOvertimeFillButton();
+        } else if (location.hostname.includes("runtime-app.powerplatform.com")) {
+            mountOvertimeFillButtonAlt();
+        }
 
         const accordionTitle = document.querySelector(".myte-accordion-title");
         const existingButton = document.getElementById("myte-tools-btn");
