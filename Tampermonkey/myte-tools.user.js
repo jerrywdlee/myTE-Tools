@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.5.0
+// @version      1.5.1
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       Julia Lee (@jerrywdlee)
 // @match        https://myte.accenture.com/*
@@ -1376,7 +1376,7 @@ Best regards,
 
         const button = document.createElement("button");
         button.id = "myot-fill-btn";
-        button.style = "border:none; border-radius:10%; min-width:30px; padding:3px; font-size:16px; cursor:pointer; position:absolute; right: 150px; top: 8px; /* z-index: 50; */";
+        button.style = "border:none; border-radius:10%; min-width:30px; padding:3px; font-size:16px; cursor:pointer; position:absolute; right: 40vw; top: 8px; /* z-index: 50; */";
         button.textContent = "📝";
         button.onclick = () => {
             const dialog = getOrCreateOvertimeFillDialog();
