@@ -55,7 +55,7 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 1. Tampermonkeyのインストール画面で `Install` をクリックします。
 1. Tampermonkey上で `myTE Tools` スクリプトが有効（ON）になっていることを確認します。
 
-![Tampermonkey で myTE Tools を有効化](../../public/images/image.png)
+![Tampermonkey で myTE Tools を有効化](../../public/images/image-0.png)
 
 1. myTEをリロードして Working Hours 画面を開きます。
 
@@ -108,7 +108,9 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 1. myOT の New Item または Requested ページを開き、`Overtime` タブを開く
 
-![myOT Overtime tab](../../public/images/image-4.png)
+![myOT Overtime tab](../../public/images/image-4.png)   
+OR   
+![myOT Overtime tab](../../public/images/image-6.png)
 
 1. タイトル右側の `📝` をクリックして `Fill Overtime` ダイアログを開く
 1. 保存済み残業履歴から `Period` を選択（最新順）

@@ -55,7 +55,7 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 1. Tampermonkey will open the install page, then click `Install`.
 1. In Tampermonkey, make sure the `myTE Tools` script is enabled.
 
-![Enable myTE Tools script in Tampermonkey](./public/images/image.png)
+![Enable myTE Tools script in Tampermonkey](./public/images/image-0.png)
 
 1. Reload myTE and open the Working Hours page.
 
@@ -102,7 +102,9 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 1. Open myOT New Item or Requested page, then open the `Overtime` tab.
 
-![myOT Overtime tab](./public/images/image-4.png)
+![myOT Overtime tab](./public/images/image-4.png)   
+OR   
+![myOT Overtime tab](./public/images/image-6.png)
 
 1. Click `📝` next to the dialog title to open `Fill Overtime`.
 1. Choose a `Period` from saved overtime history (newest first).

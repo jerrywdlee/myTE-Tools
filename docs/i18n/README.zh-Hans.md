@@ -55,7 +55,7 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 1. Tampermonkey 会打开安装页，点击 `Install`。
 1. 在 Tampermonkey 中确认 `myTE Tools` 脚本已启用（ON）。
 
-![在 Tampermonkey 中启用 myTE Tools](../../public/images/image.png)
+![在 Tampermonkey 中启用 myTE Tools](../../public/images/image-0.png)
 
 1. 刷新 myTE 并进入 Working Hours 页面。
 
@@ -108,7 +108,9 @@ https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-t
 
 1. 打开 myOT 的 New Item 或 Requested 页面，然后切换到 `Overtime` 标签页。
 
-![myOT Overtime tab](../../public/images/image-4.png)
+![myOT Overtime tab](../../public/images/image-4.png)   
+OR   
+![myOT Overtime tab](../../public/images/image-6.png)
 
 1. 点击标题旁的 `📝` 打开 `Fill Overtime` 对话框。
 1. 从已保存的加班历史中选择 `Period`（最新在前）。

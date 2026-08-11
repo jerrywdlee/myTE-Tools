@@ -7,6 +7,7 @@
 // @match        https://myte.accenture.com/*
 // @match        https://avanade.sharepoint.com/teams/avanavi/myOT/Lists/myOT/NewForm*
 // @match        https://avanade.sharepoint.com/teams/avanavi/myOT/Lists/myOT/EditForm*
+// @match        https://runtime-app.powerplatform.com/publishedapp/e/default-cf36141c-ddd7-45a7-b073-111f66d0b30c/*
 // @homepageURL  https://github.com/jerrywdlee/myTE-Tools
 // @supportURL   https://github.com/jerrywdlee/myTE-Tools/issues
 // @downloadURL  https://raw.githubusercontent.com/jerrywdlee/myTE-Tools/main/Tampermonkey/myte-tools.user.js
@@ -473,8 +474,8 @@ Best regards,
             .replace(/\*([^*]+)\*/g, "$1")
             .replace(/`([^`]+)`/g, "$1")
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-            .replace(/^#{1,6}\s*/gm, "")
-            .replace(/^[-*]\s+/gm, "- ")
+            //.replace(/^#{1,6}\s*/gm, "")
+            //.replace(/^[-*]\s+/gm, "- ")
             .trim();
     }
 
@@ -1083,7 +1084,7 @@ Best regards,
         element.dispatchEvent(new Event("blur", { bubbles: true }));
     }
 
-    function formatMyOtDate(period, dayNum) {
+    function formatMyOtDate(period, dayNum, format = null) {
         const periodText = String(period || "").trim();
         const day = parseInt(String(dayNum || ""), 10);
         const matched = periodText.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
@@ -1094,7 +1095,15 @@ Best regards,
 
         const year = parseInt(matched[1], 10);
         const month = parseInt(matched[2], 10);
-        return `${month}/${day}/${year}`;
+
+        switch (format) {
+            case "MM/DD/YYYY":
+                return `${month.toString().padStart(2, "0")}/${day.toString().padStart(2, "0")}/${year}`;
+            case "YYYY/MM/DD":
+                return `${year}/${month.toString().padStart(2, "0")}/${day.toString().padStart(2, "0")}`;
+            default:
+                return `${month}/${day}/${year}`;
+        }
     }
 
     function refreshOvertimeFillDialogFields(dialog) {
@@ -1177,46 +1186,69 @@ Best regards,
                 await sleep(500);
 
                 const tab1 = document.querySelector("#Tab1");
-                if (!tab1) {
-                    setRunningNotice("Tab1 not found.", "error", 2200);
+                const conOT = document.querySelector('[data-container-name^="ContainerOT"]')
+
+                if (!tab1 && !conOT) {
+                    setRunningNotice("OT table not found.", "error", 2200);
                     return;
                 }
 
-                const dateInputs = Array.from(tab1.querySelectorAll('input[id*="Date"]'));
-                const hourInputs = Array.from(tab1.querySelectorAll('input[id*="Hour"]'));
-                const projectDescAreas = Array.from(tab1.querySelectorAll('textarea[id*="Project_desc"]'));
-                const wbsInputs = Array.from(tab1.querySelectorAll('input[id*="WBS"]'));
-                const reasonAreas = Array.from(tab1.querySelectorAll('textarea[id*="Reason"]'));
+                let maxRows = 0;
 
-                const maxRows = Math.min(
-                    overtimeEntries.length,
-                    dateInputs.length,
-                    hourInputs.length,
-                    projectDescAreas.length,
-                    wbsInputs.length,
-                    reasonAreas.length,
-                );
+                if (tab1) {
+                    const dateInputs = Array.from(tab1.querySelectorAll('input[id*="Date"]'));
+                    const hourInputs = Array.from(tab1.querySelectorAll('input[id*="Hour"]'));
+                    const projectDescAreas = Array.from(tab1.querySelectorAll('textarea[id*="Project_desc"]'));
+                    const wbsInputs = Array.from(tab1.querySelectorAll('input[id*="WBS"]'));
+                    const reasonAreas = Array.from(tab1.querySelectorAll('textarea[id*="Reason"]'));
 
-                for (let i = 0; i < maxRows; i += 1) {
-                    const [dayNum, overtime] = overtimeEntries[i];
-                    const formattedDate = formatMyOtDate(selectedPeriod, dayNum);
-                    setFieldValueWithEvents(dateInputs[i], formattedDate);
-                    setFieldValueWithEvents(hourInputs[i], String(overtime));
-                    setFieldValueWithEvents(projectDescAreas[i], projectDesc);
-                    setFieldValueWithEvents(wbsInputs[i], wbs);
-                    setFieldValueWithEvents(reasonAreas[i], reason);
+                    maxRows = Math.min(
+                        overtimeEntries.length,
+                        dateInputs.length,
+                        hourInputs.length,
+                        projectDescAreas.length,
+                        wbsInputs.length,
+                        reasonAreas.length,
+                    );
+
+                    for (let i = 0; i < maxRows; i += 1) {
+                        if (!overtimeEntries[i]) break;
+                        const [dayNum, overtime] = overtimeEntries[i];
+                        const formattedDate = formatMyOtDate(selectedPeriod, dayNum);
+                        setFieldValueWithEvents(dateInputs[i], formattedDate);
+                        setFieldValueWithEvents(hourInputs[i], String(overtime));
+                        setFieldValueWithEvents(projectDescAreas[i], projectDesc);
+                        setFieldValueWithEvents(wbsInputs[i], wbs);
+                        setFieldValueWithEvents(reasonAreas[i], reason);
+                    }
+                } else {
+                    const conOTs = Array.from(document.querySelectorAll('[data-container-name^="ContainerOT"]'));
+                    maxRows = conOTs.length;
+
+                    for (let i = 0; i < maxRows; i += 1) {
+                        if (!overtimeEntries[i]) break;
+                        const inputs = conOTs[i].querySelectorAll('input');
+                        const [dateInput, hourInput, projectDescInput, wbsInput, reasonInput] = Array.from(inputs);
+                        const [dayNum, overtime] = overtimeEntries[i];
+                        const formattedDate = formatMyOtDate(selectedPeriod, dayNum, "YYYY/MM/DD");
+                        setFieldValueWithEvents(dateInput, formattedDate);
+                        setFieldValueWithEvents(hourInput, String(overtime));
+                        setFieldValueWithEvents(projectDescInput, projectDesc);
+                        setFieldValueWithEvents(wbsInput, wbs);
+                        setFieldValueWithEvents(reasonInput, reason);
+                    }
                 }
 
                 console.log(`${RUNTIME_PREFIX} Overtime fill completed:`, {
                     period: selectedPeriod,
                     filledRows: maxRows,
-                    availableRows: {
-                        date: dateInputs.length,
-                        hour: hourInputs.length,
-                        projectDesc: projectDescAreas.length,
-                        wbs: wbsInputs.length,
-                        reason: reasonAreas.length,
-                    },
+                    // availableRows: {
+                    //     date: dateInputs.length,
+                    //     hour: hourInputs.length,
+                    //     projectDesc: projectDescAreas.length,
+                    //     wbs: wbsInputs.length,
+                    //     reason: reasonAreas.length,
+                    // },
                 });
 
                 setRunningNotice(`Filled ${maxRows} overtime row(s).`, "success", 2200);
@@ -1326,6 +1358,36 @@ Best regards,
         dialogContainer.append(button);
     }
 
+    function mountOvertimeFillButtonAlt() {
+        // const form = document.querySelector('form[action*=myOT]');
+        const dialogContainer = document.querySelector('[data-container-name="Submit_Screen-container"] .appmagic-label-text');
+        const existingButton = document.getElementById("myot-fill-btn");
+
+        if (!dialogContainer) {
+            if (existingButton) {
+                existingButton.remove();
+            }
+            return;
+        }
+
+        if (existingButton) {
+            return;
+        }
+
+        const button = document.createElement("button");
+        button.id = "myot-fill-btn";
+        button.style = "border:none; border-radius:10%; min-width:30px; padding:3px; font-size:16px; cursor:pointer; position:absolute; right: 150px; top: 8px; /* z-index: 50; */";
+        button.textContent = "📝";
+        button.onclick = () => {
+            const dialog = getOrCreateOvertimeFillDialog();
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        };
+
+        dialogContainer.append(button);
+    }
+
     async function mountToolbarButton(targetElement) {
         if (!targetElement) {
             return;
@@ -1404,6 +1466,7 @@ Best regards,
     function handleUI() {
         handleToolbarUI();
         mountOvertimeFillButton();
+        mountOvertimeFillButtonAlt();
 
         const accordionTitle = document.querySelector(".myte-accordion-title");
         const existingButton = document.getElementById("myte-tools-btn");
