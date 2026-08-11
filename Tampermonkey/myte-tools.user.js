@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         myTE Tools
 // @namespace    https://github.com/jerrywdlee/myTE-Tools
-// @version      1.4.4
+// @version      1.5.0
 // @description  Auto-fill myTE working hours with optional overtime synchronization.
 // @author       Julia Lee (@jerrywdlee)
 // @match        https://myte.accenture.com/*
